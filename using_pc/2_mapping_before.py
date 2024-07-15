@@ -18,7 +18,7 @@ def is_pcd(filename):
     return any(filename.endswith(ext) for ext in EXTENSIONS)
 
 
-dataset_path = '/home/pyo/b1_perception'
+dataset_path = '/home/pyo/b1_perception/exercise_mapping'
 pcd_path = os.path.join(dataset_path, 'pcds')
 odom_path = dataset_path
 EXTENSIONS = ['.pcd']
