@@ -5,6 +5,7 @@ Created on Thu Jul 11 22:05:01 2024
 
 @author: pyo
 """
+import numpy as np
 
 from utils_mapping import *
 from data_processing import *
@@ -56,26 +57,34 @@ if __name__ =='__main__':
     ### 3. transform clouds from poses & accumulate clouds    
     accumulated_cloud = None
     cnt = 0
-    
+    accum_cnt = 0
+
+    ## 3.1 detect anomaly point cloud
+    anomaly_thres = get_anomaly_thres(odom_clouds)
+
+    ## 3.2 accumulate point cloud
     for i in range(len(odom_clouds)):
-        if(i == 0):
-            accumulated_cloud = odom_clouds[i]
+        if (is_anomaly_norm(odom_clouds[i], anomaly_thres)):
+            pass
         else:
-            filtered_cloud = filter_distance(odom_clouds[i], 10.0)
-            
-            prev_pose = odom[0][0:7]
-            curr_pose = odom[i][0:7]
-            # curr_pose[1] = 0
-            
-            T = get_transform_between_poses(prev_pose, curr_pose)
-            
-            applied_cloud = apply_transform2cloud(filtered_cloud, T)
-            
-            accumulated_cloud = np.vstack((accumulated_cloud, applied_cloud))
-            
-        print(f'{cnt}th cloud shape: {odom_clouds[i].shape} | ACCUMULATED clouds : {accumulated_cloud.shape}')
+            if(i == 0):
+                accumulated_cloud = odom_clouds[i]
+            else:
+                filtered_cloud = filter_distance(odom_clouds[i], 10.0)
+
+                prev_pose = odom[0][0:7]
+                curr_pose = odom[i][0:7]
+
+                T = get_transform_between_poses(prev_pose, curr_pose)
+
+                applied_cloud = apply_transform2cloud(filtered_cloud, T)
+
+                accumulated_cloud = np.vstack((accumulated_cloud, applied_cloud))
+                accum_cnt = accum_cnt + accumulated_cloud.shape[0]
+
+        print(f'{cnt}th cloud shape: {odom_clouds[i].shape[0]} | ACCUMULATED clouds : {accum_cnt}')
         cnt = cnt +1
-        
+
     ### 4. save file (accumulated cloud npy -> pcd)
     accumulated_pcd_dir = os.path.join(dataset_path, 'accumulated.pcd')
     save_pcd_from_npy(accumulated_cloud, accumulated_pcd_dir)
