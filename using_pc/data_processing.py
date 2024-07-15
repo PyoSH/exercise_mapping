@@ -16,3 +16,11 @@ def filter_distance(pc, max_dist=10.0):
     
     return filtered_cloud
 
+
+def segment_ground(pcd):
+    plane_model, inliers = pcd.segment_plane(distance_threshold=0.01, 
+                                             ransac_n=3, num_iterations=1000)
+    ground = pcd.select_by_index(inliers)
+    non_ground = pcd.select_by_index(inliers, invert=True)
+    
+    return ground, non_ground
