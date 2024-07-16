@@ -11,7 +11,6 @@ import open3d as o3d
 import math
 import matplotlib.pyplot as plt
 from sklearn.linear_model import RANSACRegressor
-import cv2
 from utils_mapping import apply_transform2cloud, get_transform_between_poses
 
 def filter_distance(pc, max_dist=10.0):
@@ -104,6 +103,7 @@ class PROCESS_3D_PCD():
         accumulated_cloud = None
         cnt = 0
         accum_cnt = 0
+        is_accum_empty = True
 
         ## 3.1 detect anomaly point cloud
         anomaly_thres = get_anomaly_thres(sensor_clouds)
@@ -113,8 +113,9 @@ class PROCESS_3D_PCD():
             if (is_anomaly_norm(sensor_clouds[i], anomaly_thres)):
                 pass
             else:
-                if (i == 0):
+                if (is_accum_empty):
                     accumulated_cloud = sensor_clouds[i]
+                    is_accum_empty = False
                 else:
                     filtered_cloud = filter_distance(sensor_clouds[i], 10.0)
 
@@ -126,6 +127,7 @@ class PROCESS_3D_PCD():
                     applied_cloud = apply_transform2cloud(filtered_cloud, T_poses)
 
                     accumulated_cloud = np.vstack((accumulated_cloud, applied_cloud))
+                    np.vstack((accumulated_cloud, applied_cloud))
                     accum_cnt = accum_cnt + accumulated_cloud.shape[0]
 
             print(f'{cnt}th cloud shape: {sensor_clouds[i].shape[0]} | ACCUMULATED clouds : {accum_cnt}')

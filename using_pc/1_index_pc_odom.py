@@ -11,7 +11,7 @@ from utils_mapping import *
 if __name__ =='__main__':
 
     dataset_path = '/home/pyo/b1_perception/exercise_mapping'
-    pcd_path = os.path.join(dataset_path, 'pcds')
+    pcd_path = os.path.join(dataset_path, 'pcds_front')
     odom_path = dataset_path
 
     test = MATCH_PC_ODOM(dataset_path, pcd_path, odom_path)

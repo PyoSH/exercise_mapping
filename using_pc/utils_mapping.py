@@ -150,7 +150,7 @@ class MATCH_PC_ODOM():
             self.MATCHED_LIST_PCD.append(npy_from_pcd(pcd_file))
 
         # load odom & timeStamps
-        odom_origin = np.loadtxt(os.path.join(self.ODOM_PATH, 'odometry.txt'), delimiter=',')
+        odom_origin = np.loadtxt(os.path.join(self.ODOM_PATH, 'odometry_0716.txt'), delimiter=',')
         odom_timestamps = list(np.array(odom_origin[:, -1]))
         pc_timestamps = list(np.loadtxt(os.path.join(self.PCD_PATH, "pc_timestamp.txt"), delimiter=',')[:, 1])
 
@@ -170,12 +170,12 @@ class MATCH_PC_ODOM():
 
 
 class PCL_FROM_ROS():
-    def __init__(self, root_dir, bag_path, topic_name, timestamp_path):
+    def __init__(self, root_dir, bag_path, topic_name, direction, timestamp_path):
         self.ROOT_DIR = root_dir
         self.BAG_PATH = bag_path
         self.TOPIC_NAME = topic_name
         self.TIMESTAMP_PATH = timestamp_path
-
+        self.DIRECTION = direction
         self.PC_NPY_LIST = []
         self.TIMESTAMP_LIST = []
 
@@ -205,7 +205,7 @@ class PCL_FROM_ROS():
 
                 # PCD 파일로 저장
                 if (msg):
-                    pcd_filename = os.path.join(self.ROOT_DIR, 'pcds', f"output_{count}.pcd")
+                    pcd_filename = os.path.join(self.ROOT_DIR, self.DIRECTION , f"output_{count}.pcd")
                     o3d.io.write_point_cloud(pcd_filename, pcloud)
                     print(f"Saved {pcd_filename}")
 

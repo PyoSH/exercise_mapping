@@ -11,7 +11,7 @@ import os
 from copy import deepcopy
 
 dataset_path = '/home/pyo/b1_perception/exercise_mapping'
-pcd_path = os.path.join(dataset_path, 'accumulated.pcd')
+pcd_path = os.path.join(dataset_path, 'test.pcd')
 processed_pcd_path = os.path.join(dataset_path, 'processed.pcd')
 
 if __name__ =='__main__':
@@ -21,7 +21,7 @@ if __name__ =='__main__':
     
     ### 2.data denoise and downsampling
     ## 2.1 denoise
-    cl, idx = pcd.remove_statistical_outlier(nb_neighbors=100, std_ratio=2.0)
+    cl, idx = pcd.remove_statistical_outlier(nb_neighbors=20, std_ratio=2.0)
     denoised_pcd = pcd.select_by_index(idx)
     
     ## 2.2 downsampling
