@@ -11,6 +11,8 @@ import open3d as o3d
 import math
 import matplotlib.pyplot as plt
 from sklearn.linear_model import RANSACRegressor
+import cv2
+from utils_mapping import apply_transform2cloud, get_transform_between_poses
 
 def filter_distance(pc, max_dist=10.0):
     distances = np.linalg.norm(pc, axis=1)
@@ -85,3 +87,48 @@ def fit_wall(pc_2d):
     plt.gca().invert_yaxis()  # y축 방향 반전 (이미지 좌표에 맞춤)
     plt.legend()
     plt.show()
+
+class PROCESS_3D_PCD():
+    def __init__(self, matched_pcd, matched_odom, T):
+        self.PCD = matched_pcd
+        self.ODOM = matched_odom
+        self.T = T
+
+    def get_processed_3d_npy(self):
+        sensor_clouds = self.PCD
+
+        for i in range(len(self.PCD)):
+            sensor_clouds[i] = apply_transform2cloud(sensor_clouds[i], self.T)
+
+        ### 3. transform clouds from poses & accumulate clouds
+        accumulated_cloud = None
+        cnt = 0
+        accum_cnt = 0
+
+        ## 3.1 detect anomaly point cloud
+        anomaly_thres = get_anomaly_thres(sensor_clouds)
+
+        ## 3.2 accumulate point cloud
+        for i in range(len(sensor_clouds)):
+            if (is_anomaly_norm(sensor_clouds[i], anomaly_thres)):
+                pass
+            else:
+                if (i == 0):
+                    accumulated_cloud = sensor_clouds[i]
+                else:
+                    filtered_cloud = filter_distance(sensor_clouds[i], 10.0)
+
+                    prev_pose = self.ODOM[0][0:7]
+                    curr_pose = self.ODOM[i][0:7]
+
+                    T_poses = get_transform_between_poses(prev_pose, curr_pose)
+
+                    applied_cloud = apply_transform2cloud(filtered_cloud, T_poses)
+
+                    accumulated_cloud = np.vstack((accumulated_cloud, applied_cloud))
+                    accum_cnt = accum_cnt + accumulated_cloud.shape[0]
+
+            print(f'{cnt}th cloud shape: {sensor_clouds[i].shape[0]} | ACCUMULATED clouds : {accum_cnt}')
+            cnt = cnt + 1
+
+        return accumulated_cloud

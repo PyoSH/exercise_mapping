@@ -10,7 +10,9 @@ import os
 import numpy as np
 import open3d as o3d
 import math
-
+import rosbag
+from sensor_msgs import point_cloud2
+from copy import deepcopy
 
 def npy_from_pcd(pcd_file):
     pcd = o3d.io.read_point_cloud(pcd_file)
@@ -93,3 +95,186 @@ def apply_transform2cloud(cloud, trsf):
     applied_points = np.dot(trsf, homogeneous_points.T).T
     
     return applied_points[:, :3]
+
+def file_path(path, fileName):
+    return os.path.join(path, '{}'.format(fileName) )
+
+def is_pcd(fileName):
+    EXTENSIONS = ['.pcd']
+    return any(fileName.endswith(ext) for ext in EXTENSIONS)
+
+def binary_search_closest(arr, target):
+    low, high = 0, len(arr) - 1
+    closest_num = None
+
+    # 배열이 빈 경우 바로 반환
+    if len(arr) == 0:
+        return None
+    # 배열에 하나의 요소만 있는 경우 바로 반환
+    if len(arr) == 1:
+        return arr[0]
+
+    while low <= high:
+        mid = (low + high) // 2
+
+        # 가능한 가장 가까운 숫자를 업데이트
+        if closest_num is None or abs(arr[mid] - target) < abs(closest_num - target):
+            closest_num = arr[mid]
+
+        if arr[mid] < target:
+            low = mid + 1
+        elif arr[mid] > target:
+            high = mid - 1
+        else:
+            return arr[mid]  # 정확히 일치하는 값 찾음
+
+    return closest_num
+
+class MATCH_PC_ODOM():
+    def __init__(self, root_dir, pcd_path, odom_path):
+        self.ROOT_DIR = root_dir
+        self.PCD_PATH = pcd_path
+        self.ODOM_PATH = odom_path
+
+        self.MATCHED_LIST_PCD = []
+        self.MATCHED_LIST_ODOM = []
+
+
+    def run(self):
+        ### 1. Load lists
+        # pcds
+        pcd_filenames = [file_path(self.PCD_PATH, f) for f in os.listdir(self.PCD_PATH) if is_pcd(f)]
+        pcd_filenames.sort()
+
+        for pcd_file in pcd_filenames:
+            self.MATCHED_LIST_PCD.append(npy_from_pcd(pcd_file))
+
+        # load odom & timeStamps
+        odom_origin = np.loadtxt(os.path.join(self.ODOM_PATH, 'odometry.txt'), delimiter=',')
+        odom_timestamps = list(np.array(odom_origin[:, -1]))
+        pc_timestamps = list(np.loadtxt(os.path.join(self.PCD_PATH, "pc_timestamp.txt"), delimiter=',')[:, 1])
+
+        # collect time-matched poses which related in pointcloud
+        for i in pc_timestamps:
+            curr_pc_pub_time = i
+            closest_item = binary_search_closest(odom_timestamps, curr_pc_pub_time)
+            closest_idx = odom_timestamps.index(closest_item)
+            self.MATCHED_LIST_ODOM.append(odom_origin[closest_idx, :])
+
+
+    def save_txt_matched(self):
+        arr_odom_selected = np.array(self.MATCHED_LIST_ODOM)
+        saveDir = os.path.join(self.ODOM_PATH, "odom_matched.txt")
+        np.savetxt(saveDir, arr_odom_selected, fmt="%f", delimiter=',')
+        print(f"Data at {saveDir} saved.")
+
+
+class PCL_FROM_ROS():
+    def __init__(self, root_dir, bag_path, topic_name, timestamp_path):
+        self.ROOT_DIR = root_dir
+        self.BAG_PATH = bag_path
+        self.TOPIC_NAME = topic_name
+        self.TIMESTAMP_PATH = timestamp_path
+
+        self.PC_NPY_LIST = []
+        self.TIMESTAMP_LIST = []
+
+    def run(self):
+        bag = rosbag.Bag(self.BAG_PATH, 'r')
+        count = 0
+        time_0 = None
+        is_1st = True
+
+        with open(self.TIMESTAMP_PATH, 'w') as timestamp_txt:
+            for topic, msg, t_ in bag.read_messages(topics=[self.TOPIC_NAME]):
+                _timestamp = msg.header
+                ts = _timestamp.stamp
+                t = ts.secs + ts.nsecs / float(1e9)
+
+                if (is_1st):
+                    time_0 = t
+                    is_1st = False
+                else:
+                    pass
+
+                t = t - time_0
+
+                pc = point_cloud2.read_points(msg, skip_nans=True, field_names=("x", "y", "z"))
+                pcloud = o3d.geometry.PointCloud()
+                pcloud.points = o3d.utility.Vector3dVector(list(pc))
+
+                # PCD 파일로 저장
+                if (msg):
+                    pcd_filename = os.path.join(self.ROOT_DIR, 'pcds', f"output_{count}.pcd")
+                    o3d.io.write_point_cloud(pcd_filename, pcloud)
+                    print(f"Saved {pcd_filename}")
+
+                    timestamp_txt.write(f"{int(msg.header.seq)}, {'{:.12f}'.format(t)}\n")
+                    self.TIMESTAMP_LIST.append(t)
+                    self.PC_NPY_LIST.append(np.asarray(pcloud.points))
+
+                    count += 1
+
+        bag.close()
+        print(f"Total {count} point clouds saved.")
+
+class ODOM_FROM_ROS():
+    def __init__(self, root_dir, bag_path, topic_name, output_dir):
+        self.ROOT_DIR =root_dir
+        self.BAG_PATH = bag_path
+        self.TOPIC_NAME = topic_name
+        self.OUTPUT = output_dir
+
+    def save_odometry_to_txt(self):
+        bag = rosbag.Bag(self.BAG_PATH, 'r')
+        count = 0
+        infoVector=np.zeros(9)
+        time_0 = 0
+        pose_0 = None
+        pose_0_orientation_inv = None
+        is_1st = True
+
+        with open(self.OUTPUT, 'w') as file:
+            for _, msg, t_ in bag.read_messages(topics=[self.TOPIC_NAME]):
+                # 오도메트리 데이터 추출
+                _pose=msg.pose.pose
+                _timestamp =msg.header
+
+                ts = _timestamp.stamp
+                t = ts.secs + ts.nsecs / float(1e9)
+
+                # 1st iteration -> set t_0
+                if(is_1st):
+                    time_0 = t
+                    pose_0 = deepcopy(_pose)
+                    is_1st = False
+                else:
+                    pass
+
+                t = t - time_0
+                curr_orientation =[_pose.orientation.x, _pose.orientation.y, _pose.orientation.z, _pose.orientation.w]
+
+                infoVector[0] = _pose.position.x
+                infoVector[1] = _pose.position.y
+                infoVector[2] = _pose.position.z
+                infoVector[3] = curr_orientation[0]
+                infoVector[4] = curr_orientation[1]
+                infoVector[5] = curr_orientation[2]
+                infoVector[6] = curr_orientation[3]
+                infoVector[7] = int(_timestamp.seq)
+                infoVector[8] = '{:.12f}'.format(t)
+
+                if(infoVector[0]):
+                    cur_pose=infoVector
+                    file.write(str(cur_pose[0])+','+str(cur_pose[1])+','+str(cur_pose[2])+','
+                        +str(cur_pose[3])+','+str(cur_pose[4])+','+str(cur_pose[5])+','+str(cur_pose[6])+','
+                        +str(cur_pose[7])+','+str(cur_pose[8])+'\n')
+
+                    count += 1
+                    print(f"Data at {count} saved.")
+                else:
+                    print(f"No data")
+                    pass
+
+        bag.close()
+        print(f"Total {count} odometry entries saved to {self.OUTPUT}.")
