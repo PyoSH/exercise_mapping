@@ -9,6 +9,7 @@ Created on Fri Jul 12 00:21:08 2024
 import numpy as np
 import open3d as o3d
 import math
+from copy import deepcopy
 import matplotlib.pyplot as plt
 from sklearn.linear_model import RANSACRegressor
 from utils_mapping import apply_transform2cloud, get_transform_between_poses
@@ -32,7 +33,7 @@ def get_anomaly_thres(pcds):
 
 def is_anomaly_norm(pc, thres):
     curr_norm = np.linalg.norm(pc, np.inf)
-    print(curr_norm, thres)
+    # print(curr_norm, thres)
     if (curr_norm > thres):
         return True
     else:
@@ -46,9 +47,9 @@ def segment_ground(pcd):
     
     return ground, non_ground
 
-def make_2D_OGD(pc_2d):
+def make_2D_OGD(pc_2d, resol=0.05):
     # 점유 격자 지도의 해상도 및 크기 설정
-    resolution = 0.05  # 5cm 당 하나의 격자
+    resolution = resol  # 5cm 당 하나의 격자
     x_max, y_max = pc_2d.max(axis=0)
     x_min, y_min = pc_2d.min(axis=0)
 
@@ -94,6 +95,7 @@ class PROCESS_3D_PCD():
         self.T = T
 
     def get_processed_3d_npy(self):
+        # sensor_clouds = deepcopy(self.PCD)
         sensor_clouds = self.PCD
 
         for i in range(len(self.PCD)):

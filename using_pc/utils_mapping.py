@@ -13,6 +13,7 @@ import math
 import rosbag
 from sensor_msgs import point_cloud2
 from copy import deepcopy
+from scipy.spatial.transform import Rotation as R
 
 def npy_from_pcd(pcd_file):
     pcd = o3d.io.read_point_cloud(pcd_file)
@@ -49,7 +50,9 @@ def get_rotation_matrix(roll, pitch, yaw):
         [0, 0, 1]
     ])
 
-    return np.dot(Rz, np.dot(Ry, Rx))
+    retval = np.dot(Rz, np.dot(Ry, Rx))
+    # return retval
+    return Rz @ Ry @ Rx
 
 def get_euler_from_quaternion(q_x, q_y, q_z, q_w):
     # 롤 (Roll)
@@ -69,6 +72,9 @@ def get_euler_from_quaternion(q_x, q_y, q_z, q_w):
     yaw_z = math.atan2(t3, t4)
     
     return roll_x, pitch_y, yaw_z  # 라디안 단위로 반환
+
+# def get_R_from_quaternion(q_x, q_y, q_z, q_w):
+#     R.from_quat()
 
 def get_transform_pose(curr):
     x = curr[0]
@@ -150,7 +156,7 @@ class MATCH_PC_ODOM():
             self.MATCHED_LIST_PCD.append(npy_from_pcd(pcd_file))
 
         # load odom & timeStamps
-        odom_origin = np.loadtxt(os.path.join(self.ODOM_PATH, 'odometry_0716.txt'), delimiter=',')
+        odom_origin = np.loadtxt(os.path.join(self.ODOM_PATH, 'odometry.txt'), delimiter=',')
         odom_timestamps = list(np.array(odom_origin[:, -1]))
         pc_timestamps = list(np.loadtxt(os.path.join(self.PCD_PATH, "pc_timestamp.txt"), delimiter=',')[:, 1])
 
